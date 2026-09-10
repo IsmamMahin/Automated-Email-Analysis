@@ -6,10 +6,11 @@
   "scripts": {
     "dev": "trigger.dev dev",
     "typecheck": "tsc --noEmit",
-    "auth:gmail": "node scripts/get-gmail-token.mjs"
+    "auth:gmail": "node scripts/get-gmail-token.mjs",
+    "check:instant": "node scripts/instant-check.mjs"
   },
   "dependencies": {
-    "@trigger.dev/sdk": "^4.4.0",
+    "@trigger.dev/sdk": "4.5.16",
     "imapflow": "^1.0.170",
     "postal-mime": "^2.3.1"
   },
