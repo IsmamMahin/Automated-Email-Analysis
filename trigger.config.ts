@@ -1,7 +1,7 @@
 import { defineConfig } from "@trigger.dev/sdk";
 
 export default defineConfig({
-  project: "email-analysis",
+  project: "email-sorting-agent-NfCy",
   dirs: ["./src/trigger"],
   maxDuration: 300,
   retries: {
