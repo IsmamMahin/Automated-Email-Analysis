@@ -7,7 +7,8 @@
     "dev": "trigger.dev dev",
     "typecheck": "tsc --noEmit",
     "auth:gmail": "node scripts/get-gmail-token.mjs",
-    "check:instant": "node scripts/instant-check.mjs"
+    "check:instant": "node scripts/instant-check.mjs",
+    "bot": "node scripts/telegram-listener.mjs"
   },
   "dependencies": {
     "@trigger.dev/sdk": "4.5.16",

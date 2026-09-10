@@ -207,6 +207,12 @@ async function runInstantBriefing(hours = 2, maxResults = 20) {
   } else {
     console.error("✗ Failed to send message to Telegram");
   }
+  return { success: sent, emailCount: emails.length, briefingHtml };
 }
 
-runInstantBriefing(2, 20).catch(console.error);
+export { runInstantBriefing, sendTelegramMessage };
+
+import { fileURLToPath } from "url";
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  runInstantBriefing(2, 20).catch(console.error);
+}
