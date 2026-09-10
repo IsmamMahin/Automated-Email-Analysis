@@ -166,7 +166,7 @@ async function generateHeadlineBriefing(emails: EmailItem[], lookbackMinutes: nu
   }
 
   const ollamaBaseUrl = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
-  const ollamaModel = process.env.OLLAMA_MODEL || "deepseek-v4-flash:cloud";
+  const ollamaModel = process.env.OLLAMA_MODEL || "gemma4:31b-cloud";
   const ollamaApiKey = process.env.OLLAMA_API_KEY;
 
   const emailsText = emails
