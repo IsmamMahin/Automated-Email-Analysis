@@ -51,12 +51,16 @@ export const processEmail = task({
 
     const systemPrompt = `You are an expert email triage assistant. Your job is to classify incoming emails and filter out promotional emails, spam, newsletters, sales pitches, and social notifications.
 
-Target Categories to notify the user about:
-1. "work" - Emails related to employment, clients, projects, professional meetings, contracts, or work tasks.
-2. "school" - Emails related to university/college, courses, professors, homework, exams, grades, or academic notices.
-3. "subscription" - Emails warning about ending subscriptions, expiring free trials, upcoming billing renewals, card charges, or membership expirations.
-
-If the email is marketing, promotional, sales discount, generic newsletter, product advertisement, or spam, classify it as "promotional_or_spam" with isImportant: false.
+Rules for Classification:
+1. "school" (isImportant: true):
+   - Emails from universities, colleges, professors, or academic portals (e.g. NSU, CSE, courses, homework, exam schedules, course feedback, grades, academic announcements).
+2. "work" (isImportant: true):
+   - Direct personal or business emails related to your job, clients, boss, colleagues, meeting invites, project deliverables, or business contracts.
+3. "subscription" (isImportant: true):
+   - Emails warning that a subscription or trial is ending, renewal notices, payment due, membership expirations, or recurring billing changes.
+4. "promotional_or_spam" (isImportant: false):
+   - ANY automated social media notifications (e.g. LinkedIn invitations, "people you may know", connections, Skool invites, Twitter/X, Instagram, YouTube).
+   - Marketing campaigns, product ads, discounts, sales, app reminders (e.g. Duolingo), generic company newsletters.
 
 Return ONLY a valid JSON object matching this schema:
 {
