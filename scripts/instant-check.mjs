@@ -1,14 +1,6 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-function escapeHtml(text) {
-  if (!text) return "";
-  return String(text)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
 function decodeBase64Url(data) {
   try {
     return Buffer.from(data, "base64url").toString("utf-8");
@@ -69,40 +61,45 @@ async function getGmailAccessToken() {
   return data.access_token;
 }
 
-async function triageWithOllama({ from, subject, date, textSnippet }) {
+async function generateHeadlineBriefing(emails, lookbackHours) {
+  if (emails.length === 0) {
+    return `📭 <b>${lookbackHours}-Hour Email Briefing</b>\n\nNo new emails received in the last ${lookbackHours} hours. Your inbox is clean!`;
+  }
+
   const ollamaBaseUrl = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
   const ollamaModel = process.env.OLLAMA_MODEL || "llama3.2:1b";
   const ollamaApiKey = process.env.OLLAMA_API_KEY;
 
-  const systemPrompt = `You are an expert email triage assistant. Your job is to classify incoming emails and filter out promotional emails, spam, newsletters, sales pitches, and social notifications.
+  const emailsText = emails
+    .map(
+      (e, idx) =>
+        `${idx + 1}. From: ${e.from}\nSubject: ${e.subject}\nDate: ${e.date}\nSnippet: ${e.snippet}\n`
+    )
+    .join("\n---\n");
 
-Rules for Classification:
-1. "school" (isImportant: true):
-   - Emails from universities, colleges, professors, or academic portals (e.g. NSU, CSE, courses, homework, exam schedules, course feedback, grades, academic announcements).
-2. "work" (isImportant: true):
-   - Direct personal or business emails related to your job, clients, boss, colleagues, meeting invites, project deliverables, or business contracts.
-3. "subscription" (isImportant: true):
-   - Emails warning that a subscription or trial is ending, renewal notices, payment due, membership expirations, or recurring billing changes.
-4. "promotional_or_spam" (isImportant: false):
-   - ANY automated social media notifications (e.g. LinkedIn invitations, "people you may know", connections, Skool invites, Twitter/X, Instagram, YouTube).
-   - Marketing campaigns, product ads, discounts, sales, app reminders (e.g. Duolingo), generic company newsletters.
+  const systemPrompt = `You are an executive email briefing assistant. Given a list of emails received in the last two hours, generate a punchy, headline-style summary for Telegram.
 
-Return ONLY a valid JSON object matching this schema:
-{
-  "isImportant": boolean,
-  "category": "work" | "school" | "subscription" | "promotional_or_spam",
-  "urgency": "high" | "medium" | "low",
-  "summary": "1-2 concise sentences explaining what this email is about and why it matters",
-  "actionRequired": "Concise next step or 'None'"
-}`;
+Guidelines:
+1. Identify and highlight important emails:
+   - School (university announcements, courses, homework, professors, feedback)
+   - Work (clients, boss, job updates, project deadlines, contracts)
+   - Subscriptions ending (billing renewals, expiring trials, card charges)
+   Provide a crisp 1-line headline bullet for each important item with sender/subject and any required action.
+2. Group all promotional, marketing, newsletters, and automated social notifications (e.g. LinkedIn invitations, Duolingo, promotional sales) into a single concise summary line noting they are low priority / safe to ignore.
+3. Use clean HTML formatting: <b>bold</b>, <i>italic</i>, and bullet points (•). Do NOT use Markdown asterisks or backticks.
 
-  const userPrompt = `Email Details:
-From: ${from}
-Subject: ${subject}
-Date: ${date}
+Example format:
+📰 <b>2-Hour Email Briefing</b>
+<i>4 emails received</i>
 
-Email Body:
-${textSnippet || "(No body text found)"}`;
+📌 <b>Key Headlines:</b>
+• 🎓 <b>[School] CSE311L:</b> Feedback survey request from lab instructor (Action: Optional survey)
+• 💼 <b>[Work] Project Alpha:</b> Meeting rescheduled to 4 PM today
+
+💤 <b>Low Priority & Promotional:</b>
+• 2 promotional/social emails (LinkedIn invitation, Duolingo reminder) - safe to ignore.
+
+⚡ <b>Action Items:</b> Complete CSE311L feedback if interested.`;
 
   const headers = { "Content-Type": "application/json" };
   if (ollamaApiKey) {
@@ -116,9 +113,8 @@ ${textSnippet || "(No body text found)"}`;
       model: ollamaModel,
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
+        { role: "user", content: `Here are the ${emails.length} emails received in the last ${lookbackHours} hours:\n\n${emailsText}` },
       ],
-      format: "json",
       stream: false,
     }),
   });
@@ -127,54 +123,13 @@ ${textSnippet || "(No body text found)"}`;
     throw new Error(`Ollama error (${res.status}): ${await res.text()}`);
   }
 
-  const resData = await res.json();
-  const rawContent = resData.message?.content?.trim() || "{}";
-  const cleaned = rawContent.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-
-  try {
-    return JSON.parse(cleaned);
-  } catch {
-    console.error("Malformed JSON from Ollama:", rawContent);
-    return {
-      isImportant: false,
-      category: "promotional_or_spam",
-      urgency: "low",
-      summary: "Could not parse email",
-      actionRequired: "None",
-    };
-  }
+  const data = await res.json();
+  return data.message?.content?.trim();
 }
 
-async function sendTelegramAlert({ category, urgency, from, subject, date, summary, actionRequired }) {
+async function sendTelegramMessage(text) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
-  if (!botToken || !chatId) {
-    console.warn("TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID missing in .env, skipping Telegram send.");
-    return false;
-  }
-
-  const categoryLabels = {
-    work: { label: "Work", icon: "💼" },
-    school: { label: "School", icon: "🎓" },
-    subscription: { label: "Subscription Ending", icon: "💳" },
-  };
-
-  const catInfo = categoryLabels[category] || { label: category.toUpperCase(), icon: "📌" };
-  const urgencyEmoji = { high: "🔴 High", medium: "🟡 Medium", low: "🟢 Low" };
-  const urgencyText = urgencyEmoji[urgency] || urgency;
-
-  const text = `<b>${catInfo.icon} Important Email Alert: ${catInfo.label}</b>
-
-<b>Urgency:</b> ${escapeHtml(urgencyText)}
-<b>From:</b> ${escapeHtml(from)}
-<b>Subject:</b> ${escapeHtml(subject)}
-<b>Date:</b> ${escapeHtml(date)}
-
-<b>Summary:</b>
-${escapeHtml(summary)}
-
-<b>Action Required:</b>
-${escapeHtml(actionRequired || "None")}`;
 
   const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: "POST",
@@ -190,97 +145,68 @@ ${escapeHtml(actionRequired || "None")}`;
   return res.ok;
 }
 
-async function runInstantCheck(count = 10) {
+async function runInstantBriefing(hours = 2, maxResults = 20) {
   console.log(`\n======================================================`);
-  console.log(`🚀 Starting Instant Check for the last ${count} emails...`);
+  console.log(`📰 Generating Headline Email Briefing (Last ${hours} Hours)...`);
   console.log(`======================================================\n`);
 
   console.log("1. Authenticating with Gmail API...");
   const token = await getGmailAccessToken();
   console.log("✓ Gmail access token obtained.\n");
 
-  console.log(`2. Fetching list of last ${count} messages...`);
+  const sinceEpochSeconds = Math.floor((Date.now() - hours * 60 * 60 * 1000) / 1000);
+  console.log(`2. Fetching emails received in the last ${hours} hours...`);
+
   const listRes = await fetch(
-    `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${count}`,
-    {
-      headers: { Authorization: `Bearer ${token}` },
-    }
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=after%3A${sinceEpochSeconds}&maxResults=${maxResults}`,
+    { headers: { Authorization: `Bearer ${token}` } }
   );
 
   if (!listRes.ok) {
-    throw new Error(`Gmail API list error: ${await listRes.text()}`);
+    throw new Error(`Gmail API error: ${await listRes.text()}`);
   }
 
   const listData = await listRes.json();
   const messages = listData.messages || [];
-  console.log(`✓ Retrieved ${messages.length} messages.\n`);
+  console.log(`✓ Found ${messages.length} emails.\n`);
 
-  console.log(`3. Analyzing messages with Ollama (${process.env.OLLAMA_MODEL || "qwen2.5:0.5b"})...\n`);
-
-  const results = [];
-
+  const emails = [];
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i];
     const detailRes = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      }
+      { headers: { Authorization: `Bearer ${token}` } }
     );
-
-    if (!detailRes.ok) {
-      console.warn(`[${i + 1}/${messages.length}] Failed to fetch message ${msg.id}`);
-      continue;
-    }
+    if (!detailRes.ok) continue;
 
     const detail = await detailRes.json();
     const headers = detail.payload?.headers || [];
     const getHeader = (name) =>
       headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value || "";
 
-    const subject = getHeader("subject") || "(No Subject)";
-    const from = getHeader("from") || "Unknown Sender";
-    const date = getHeader("date") || new Date().toISOString();
-    const bodyText = extractBodyText(detail.payload) || detail.snippet || "";
-    const textSnippet = bodyText.slice(0, 3000);
-
-    process.stdout.write(`[${i + 1}/${messages.length}] Triage: "${subject.slice(0, 45)}"... `);
-
-    const triage = await triageWithOllama({ from, subject, date, textSnippet });
-
-    let sent = false;
-    if (triage.isImportant && triage.category !== "promotional_or_spam") {
-      process.stdout.write(`=> 🚨 IMPORTANT [${triage.category}] (Sending Telegram alert)... `);
-      sent = await sendTelegramAlert({
-        category: triage.category,
-        urgency: triage.urgency,
-        from,
-        subject,
-        date,
-        summary: triage.summary,
-        actionRequired: triage.actionRequired,
-      });
-      console.log(sent ? "✓ Sent!" : "✗ Failed to send");
-    } else {
-      console.log(`=> 💤 IGNORED [${triage.category}]`);
-    }
-
-    results.push({
-      subject: subject.slice(0, 40),
-      from: from.slice(0, 30),
-      category: triage.category,
-      important: triage.isImportant,
-      telegramSent: sent,
+    emails.push({
+      id: detail.id,
+      from: getHeader("from") || "Unknown",
+      subject: getHeader("subject") || "(No Subject)",
+      date: getHeader("date") || new Date().toISOString(),
+      snippet: (extractBodyText(detail.payload) || detail.snippet || "").slice(0, 1500),
     });
   }
 
-  console.log("\n======================================================");
-  console.log("📊 Instant Check Summary Table:");
-  console.log("======================================================");
-  console.table(results);
+  console.log(`3. Generating headline brief with Ollama (${process.env.OLLAMA_MODEL || "llama3.2:1b"})...\n`);
+  const briefingHtml = await generateHeadlineBriefing(emails, hours);
+
+  console.log("Generated Headline Briefing:\n------------------------------------------------------");
+  console.log(briefingHtml);
+  console.log("------------------------------------------------------\n");
+
+  console.log("4. Sending briefing to Telegram...");
+  const sent = await sendTelegramMessage(briefingHtml);
+  if (sent) {
+    console.log("✓ Headline briefing sent to Telegram successfully!");
+  } else {
+    console.error("✗ Failed to send message to Telegram");
+  }
 }
 
-runInstantCheck(10).catch((err) => {
-  console.error("\n❌ Error during instant check:", err);
-  process.exit(1);
-});
+runInstantBriefing(2, 20).catch(console.error);
