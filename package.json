@@ -1,0 +1,20 @@
+{
+  "name": "email-analysis-automation",
+  "version": "1.0.0",
+  "description": "Trigger.dev automation to triage incoming emails via Ollama and alert to Telegram",
+  "type": "module",
+  "scripts": {
+    "dev": "trigger.dev dev",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@trigger.dev/sdk": "^4.4.0",
+    "imapflow": "^1.0.170",
+    "postal-mime": "^2.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "trigger.dev": "^4.5.16",
+    "typescript": "^5.5.0"
+  }
+}
