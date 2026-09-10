@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "trigger.dev dev",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "auth:gmail": "node scripts/get-gmail-token.mjs"
   },
   "dependencies": {
     "@trigger.dev/sdk": "^4.4.0",
@@ -14,6 +15,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
+    "dotenv": "^17.4.2",
     "trigger.dev": "^4.5.16",
     "typescript": "^5.5.0"
   }
