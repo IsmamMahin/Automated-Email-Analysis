@@ -4,11 +4,14 @@
   "description": "Trigger.dev automation to triage incoming emails via Ollama and alert to Telegram",
   "type": "module",
   "scripts": {
-    "dev": "trigger.dev dev",
+    "dev": "trigger dev",
     "typecheck": "tsc --noEmit",
     "auth:gmail": "node scripts/get-gmail-token.mjs",
     "check:instant": "node scripts/instant-check.mjs",
-    "bot": "node scripts/telegram-listener.mjs"
+    "bot": "node scripts/telegram-listener.mjs",
+    "schedule": "node scripts/telegram-listener.mjs",
+    "start": "node scripts/telegram-listener.mjs",
+    "build:pdf": "node scripts/generate-pdf.mjs"
   },
   "dependencies": {
     "@trigger.dev/sdk": "4.5.16",
